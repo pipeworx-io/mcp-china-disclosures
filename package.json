@@ -1,6 +1,6 @@
 {
   "name": "@pipeworx/mcp-china-disclosures",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "China Disclosures MCP — non-SEC Chinese biotech deals and HK/STAR IPO",
   "type": "module",
   "main": "src/index.ts",
@@ -26,7 +26,7 @@
     "@cloudflare/workers-types": "^4.20260405.1"
   },
   "pipeworx": {
-    "sourceHash": "v1-d3a0eb1c646c5565c0e1da2fd4470de6ebf5c22e88a55ed0c6e3767073ded790",
-    "sourceCommit": "60f04b68c347e970c6be94a53439d1364061fc06"
+    "sourceHash": "v1-09f110702e2722b9d398e2fcd4e3a19ea6e2b71c70657add3fd8434859a2c2ab",
+    "sourceCommit": "babdd280d475dceddecc9ebf8f2a661712781a81"
   }
 }
