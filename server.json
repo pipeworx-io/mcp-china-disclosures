@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.pipeworx-io/china-disclosures",
   "title": "China Disclosures",
-  "description": "China Disclosures MCP — non-SEC Chinese biotech deals and HK/STAR IPO",
-  "version": "0.1.2",
+  "description": "China Disclosures MCP — non-SEC Chinese biotech deals and HK/STAR IPO financing, read straight out…",
+  "version": "0.1.3",
   "websiteUrl": "https://pipeworx.io/packs/china-disclosures",
   "repository": {
     "url": "https://github.com/pipeworx-io/mcp-china-disclosures",

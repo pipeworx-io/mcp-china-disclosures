@@ -2,9 +2,10 @@
 
 Non-SEC Chinese biotech deals and HK/STAR IPO financing — licensing agreements and
 IPOs with no US-listed party, read straight out of the HKEX and CNINFO exchange
-disclosure feeds. Keyless.
+disclosure feeds — plus an offline validator/decoder for China's company
+identifier (Unified Social Credit Code). Keyless.
 
-Part of [Pipeworx](https://pipeworx.io) — an MCP gateway connecting AI agents to 1683+ live data sources.
+Part of [Pipeworx](https://pipeworx.io) — an MCP gateway connecting AI agents to 1837+ live data sources. This is an independent, unofficial integration — not affiliated with, endorsed by, or published by the upstream provider.
 
 ## Tools
 
@@ -21,6 +22,13 @@ Part of [Pipeworx](https://pipeworx.io) — an MCP gateway connecting AI agents 
   search over CNINFO, the official disclosure feed for both Chinese A-share
   exchanges (Shenzhen + Shanghai, STAR Market included). Covers A-share-listed
   companies with **zero HK/US nexus** — the other half of the gap.
+- `cn_uscc_validate(code)` — offline validator/decoder for China's 18-character
+  Unified Social Credit Code (统一社会信用代码, GB 32100-2015), the single
+  identifier every registered Chinese organization carries. Checks length,
+  character set, and the official check-digit algorithm; when valid, decodes
+  the registration authority, entity type, and province (GB/T 2260,
+  province-level). No network call. Validates FORMAT ONLY — a format-valid
+  code is not proof a real company holds it.
 
 ## Why this exists, and why china-pharma / pharma-deals don't already cover it
 
@@ -109,7 +117,7 @@ Two more exchanges' own disclosure layers close the gap, both probed live
 
 ## Auth
 
-None. Keyless on all three tools.
+None. Keyless on all four tools; `cn_uscc_validate` makes no network call at all.
 
 ## Data sources
 
@@ -119,6 +127,11 @@ None. Keyless on all three tools.
 - `cninfo_disclosure_search`: `https://www.cninfo.com.cn/new/hisAnnouncement/query`
   (CNINFO's public disclosure search) and PDFs under
   `https://static.cninfo.com.cn/`.
+- `cn_uscc_validate`: no source call. The check-digit algorithm is China's own
+  published national standard (GB 32100-2015); the registration-authority and
+  entity-type tables are small published lookups from the same standard; the
+  province decode is the public GB/T 2260 administrative-division code list
+  (province level only — prefecture/city is not decoded).
 
 ## Quick Start
 
@@ -164,7 +177,7 @@ directly, instead of just this one's:
 }
 ```
 
-Both URLs reach the same gateway and the same 1683+ data sources. The
+Both URLs reach the same gateway and the same 1837+ data sources. The
 only difference is which pack's tools are listed **directly**; `ask_pipeworx`
 reaches all of them from either one.
 

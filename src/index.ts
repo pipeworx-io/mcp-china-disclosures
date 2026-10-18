@@ -712,6 +712,155 @@ async function pwFetch(url: string | URL, init: RequestInit = {}): Promise<Respo
 const UA = 'pipeworx-mcp/1.0 (bruce@mojibake.ai)';
 
 // ─────────────────────────────────────────────────────────────────────────
+// Unified Social Credit Code (统一社会信用代码, GB 32100-2015) — OFFLINE
+// validator/decoder. Added 2026-10-18 (fleet #3299), placed here because this
+// is the pack where China company-identifier lookups already live
+// (cninfo_disclosure_search resolves companies by name/code). No network
+// call: the check-digit algorithm and the registration-authority/entity-type
+// tables are the published national standard, and the province table is the
+// public GB/T 2260 code list (34 entries — small enough to live at module
+// scope; this is NOT the kind of baked bulk data pack-baked-indexes.json
+// exists for). This can only validate FORMAT — it cannot and does not claim
+// to confirm a real company holds this code; see note on every response.
+// ─────────────────────────────────────────────────────────────────────────
+
+// GB 32100-2015 §4: 31-character set, digits 0-9 then A-Y skipping I/O/S/V/Z
+// (those five are excluded specifically because they are easily confused with
+// 1/0/5/U/2 when handwritten or OCR'd).
+const USCC_CHARSET = '0123456789ABCDEFGHJKLMNPQRTUWXY';
+// GB 32100-2015 Appendix: per-position weighting factors for positions 1-17.
+const USCC_WEIGHTS = [1, 3, 9, 27, 19, 26, 16, 17, 20, 29, 25, 13, 8, 24, 10, 30, 28];
+
+function usccCharValue(c: string): number {
+  return USCC_CHARSET.indexOf(c);
+}
+
+/** GB 32100-2015 §5 check-digit algorithm over the first 17 characters. */
+function usccCheckDigit(first17: string): string {
+  let sum = 0;
+  for (let i = 0; i < 17; i++) sum += usccCharValue(first17[i]) * USCC_WEIGHTS[i];
+  const mod = sum % 31;
+  const checkValue = (31 - mod) % 31;
+  return USCC_CHARSET[checkValue];
+}
+
+// Position 1 — registration/management authority (登记管理部门代码).
+const USCC_AUTHORITY: Record<string, string> = {
+  '1': 'Organization Code Administration (机构编制) — government-authorized institutions',
+  '5': 'Civil Affairs (民政) — social organizations, foundations, private non-enterprise units',
+  '9': 'Market Regulation (工商/市场监管) — companies, the registration authority for most ordinary businesses',
+  Y: 'Other (其他)',
+};
+
+// Position 2 — entity-type code (机构类别代码), meaning depends on position 1.
+// Only the common, well-documented combinations are filled in; an
+// undocumented combination says so explicitly rather than guessing.
+const USCC_ENTITY_TYPE: Record<string, Record<string, string>> = {
+  '9': {
+    '1': 'Enterprise (企业) — the ordinary company case',
+    '2': 'Individually-owned business (个体工商户)',
+    '3': "Farmers' professional cooperative (农民专业合作社)",
+  },
+  '1': {
+    '1': 'Government organ (机关)',
+    '2': 'Public institution (事业单位)',
+    '3': 'Mass organization directly managed by the Central Commission Office (中央编办直接管理机构编制的群众团体)',
+    '9': 'Other (其他)',
+  },
+  '5': {
+    '1': 'Social organization (社会团体)',
+    '2': 'Private non-enterprise unit (民办非企业单位)',
+    '3': 'Foundation (基金会)',
+    '9': 'Other (其他)',
+  },
+  Y: {
+    '1': 'Other (其他)',
+  },
+};
+
+// Positions 3-8 — administrative-division code (行政区划代码), GB/T 2260.
+// Province-LEVEL table only (first 2 digits of the 6-digit code) — public,
+// small, stable. Prefecture-level decoding is deliberately not attempted:
+// that table is much larger and would be exactly the kind of bulk generated
+// data that must not sit at module scope in a gateway bundled into one Worker.
+const USCC_PROVINCE: Record<string, string> = {
+  '11': 'Beijing', '12': 'Tianjin', '13': 'Hebei', '14': 'Shanxi', '15': 'Inner Mongolia',
+  '21': 'Liaoning', '22': 'Jilin', '23': 'Heilongjiang',
+  '31': 'Shanghai', '32': 'Jiangsu', '33': 'Zhejiang', '34': 'Anhui', '35': 'Fujian', '36': 'Jiangxi', '37': 'Shandong',
+  '41': 'Henan', '42': 'Hubei', '43': 'Hunan', '44': 'Guangdong', '45': 'Guangxi', '46': 'Hainan',
+  '50': 'Chongqing', '51': 'Sichuan', '52': 'Guizhou', '53': 'Yunnan', '54': 'Tibet',
+  '61': 'Shaanxi', '62': 'Gansu', '63': 'Qinghai', '64': 'Ningxia', '65': 'Xinjiang',
+  '71': 'Taiwan', '81': 'Hong Kong SAR', '82': 'Macao SAR', '91': 'Overseas / not administratively divided',
+};
+
+const USCC_FORMAT_ONLY_NOTE =
+  'This validates FORMAT ONLY: length, allowed character set, and the GB 32100-2015 check-digit algorithm. A format-valid code is NOT proof that a real, registered company holds it -- confirming that requires querying China\'s National Enterprise Credit Information Disclosure System (国家企业信用信息公示系统) or an equivalent live business registry, which this tool does not do.';
+
+function validateUscc(args: Record<string, unknown>) {
+  const raw = typeof args.code === 'string' ? args.code : '';
+  const code = raw.trim().toUpperCase();
+
+  if (!code) {
+    return { valid: false, input: raw, reason: 'No code provided.', format_only_note: USCC_FORMAT_ONLY_NOTE };
+  }
+  if (code.length !== 18) {
+    return {
+      valid: false,
+      input: raw,
+      reason: `Wrong length: a Unified Social Credit Code is exactly 18 characters; "${code}" has ${code.length}.`,
+      format_only_note: USCC_FORMAT_ONLY_NOTE,
+    };
+  }
+  const badChars: Array<{ position: number; char: string }> = [];
+  for (let i = 0; i < 18; i++) {
+    if (usccCharValue(code[i]) < 0) badChars.push({ position: i + 1, char: code[i] });
+  }
+  if (badChars.length > 0) {
+    return {
+      valid: false,
+      input: raw,
+      reason: `Character(s) not in the valid 31-character set (0-9, A-H, J-N, P, Q, R, T, U, W-Y -- letters I, O, S, V, Z are deliberately excluded by the standard): ${badChars.map((b) => `position ${b.position} is "${b.char}"`).join(', ')}.`,
+      format_only_note: USCC_FORMAT_ONLY_NOTE,
+    };
+  }
+
+  const first17 = code.slice(0, 17);
+  const given = code[17];
+  const computed = usccCheckDigit(first17);
+  if (given !== computed) {
+    return {
+      valid: false,
+      input: raw,
+      reason: `Check-digit mismatch (GB 32100-2015 algorithm): the 18th character is "${given}" but the first 17 characters compute to "${computed}". This code has been altered or mistyped.`,
+      computed_check_digit: computed,
+      given_check_digit: given,
+      format_only_note: USCC_FORMAT_ONLY_NOTE,
+    };
+  }
+
+  const authorityCode = code[0];
+  const typeCode = code[1];
+  const divisionCode = code.slice(2, 8);
+  const provincePrefix = divisionCode.slice(0, 2);
+  const orgBody = code.slice(8, 17);
+
+  return {
+    valid: true,
+    input: raw,
+    normalized: code,
+    decoded: {
+      registration_authority: USCC_AUTHORITY[authorityCode] ?? `Code "${authorityCode}" is not in this tool's registration-authority table.`,
+      entity_type: USCC_ENTITY_TYPE[authorityCode]?.[typeCode] ?? `Entity-type code "${typeCode}" under authority "${authorityCode}" is not in this tool's lookup table.`,
+      administrative_division_code: divisionCode,
+      province: USCC_PROVINCE[provincePrefix] ?? `Province prefix "${provincePrefix}" is not in this tool's GB/T 2260 province table (province-level only -- prefecture/city is not decoded).`,
+      organization_code_body: orgBody,
+    },
+    check_digit: given,
+    format_only_note: USCC_FORMAT_ONLY_NOTE,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // Shared HKEX title-search plumbing (tools A + B)
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -1122,6 +1271,19 @@ const tools: McpToolExport['tools'] = [
       required: ['query'],
     },
   },
+  {
+    name: 'cn_uscc_validate',
+    description:
+      'Offline validator and decoder for China\'s 18-character Unified Social Credit Code (统一社会信用代码, GB 32100-2015) -- the single identifier every registered Chinese organization (company, social organization, government institution) carries. Checks the format (length, allowed 31-character set, and the GB 32100-2015 check-digit algorithm) and, when valid, decodes the registration authority (e.g. Market Regulation for an ordinary company), the entity type, and the province from the 6-digit administrative-division segment. No network call -- this is a pure offline algorithm plus small public lookup tables (GB/T 2260 province codes), so it works for any syntactically plausible code, including ones that do not exist. Answers "is this a valid Chinese company code", "decode this unified social credit code", "check digit for 9111000012345678AU", "which province does this USCC belong to". IMPORTANT: this validates FORMAT ONLY -- a format-valid code is not proof a real company holds it; confirming existence requires a live registry lookup this tool does not perform (see format_only_note in every response).',
+    summary: "Validates and decodes China's 18-character Unified Social Credit Code offline (format and check digit only; does not confirm the company exists).",
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        code: { type: 'string', description: 'The 18-character Unified Social Credit Code to validate, e.g. "9111000012345678AU". Case-insensitive; surrounding whitespace is trimmed.' },
+      },
+      required: ['code'],
+    },
+  },
 ];
 
 async function callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
@@ -1132,6 +1294,8 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
       return hkexIpoFilings(args);
     case 'cninfo_disclosure_search':
       return cninfoDisclosureSearch(args);
+    case 'cn_uscc_validate':
+      return validateUscc(args);
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
