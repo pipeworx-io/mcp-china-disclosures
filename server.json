@@ -3,7 +3,7 @@
   "name": "io.github.pipeworx-io/china-disclosures",
   "title": "China Disclosures",
   "description": "China Disclosures MCP — non-SEC Chinese biotech deals and HK/STAR IPO financing, read straight out…",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "websiteUrl": "https://pipeworx.io/packs/china-disclosures",
   "repository": {
     "url": "https://github.com/pipeworx-io/mcp-china-disclosures",
