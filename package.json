@@ -1,6 +1,6 @@
 {
   "name": "@pipeworx/mcp-china-disclosures",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "China Disclosures MCP — non-SEC Chinese biotech deals and HK/STAR IPO financing, read straight out of the exchanges' own disclosure feeds. Keyless.",
   "type": "module",
   "main": "lib/index.js",
@@ -27,7 +27,7 @@
     "mode": "gateway",
     "slug": "china-disclosures",
     "gatewaySlug": "china-disclosures",
-    "sourceHash": "v1-d54d8cae6b7f60c6de152b81a2b1d4cb7c4896d560fd46c8038b50b296383840",
-    "sourceCommit": "4277282d72f9bf55e548b3799aaf737baf22152f"
+    "sourceHash": "v1-ae2d60e72d13d0e3b29ba1151a18f7070195d6c7ae6401f705901ab4b67dc6b7",
+    "sourceCommit": "547a3983b42dacf4389ca474860b0a1dee8e6053"
   }
 }
